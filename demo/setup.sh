@@ -32,7 +32,14 @@ helm upgrade --install kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION
   -n kyverno --create-namespace --wait --timeout 5m
 
 step "Admission policy"
-kubectl apply -f policies/kyverno/require-exec-allowlist.yaml
+# helm --wait can return before Kyverno's webhook Service has endpoints, and
+# applying a policy goes through that webhook. Retry for up to ~2 minutes.
+for i in $(seq 1 24); do
+  kubectl apply -f policies/kyverno/require-exec-allowlist.yaml && break
+  [ "$i" -eq 24 ] && exit 1
+  echo "Kyverno webhook not ready yet, retrying in 5s..."
+  sleep 5
+done
 kubectl wait --for=condition=Ready clusterpolicy/require-exec-allowlist --timeout 120s
 
 step "Namespace and sample app"
