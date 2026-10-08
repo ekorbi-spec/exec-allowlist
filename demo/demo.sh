@@ -55,7 +55,8 @@ say "What Tetragon reported"
 # Tetragon can hold events for up to ~30s while it resolves process info.
 fetch_events() {
   kubectl -n kube-system logs ds/tetragon -c export-stdout --since-time="$START" \
-    | jq -c --arg p "$POLICY" 'select(.process_kprobe.policy_name == $p) | .process_kprobe'
+    | jq -c --arg p "$POLICY" --arg t "$START" \
+        'select(.process_kprobe.policy_name == $p and .time >= $t) | .process_kprobe'
 }
 for _ in $(seq 1 45); do
   events=$(fetch_events)

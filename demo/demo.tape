@@ -19,5 +19,7 @@ Show
 Type "./demo/demo.sh"
 Sleep 500ms
 Enter
-Wait+Screen@180s /All checks passed|check\(s\) failed/
+# Wait for the bare prompt to come back (demo lines start "$ kubectl", so
+# they don't match).
+Wait@180s /^\$ ?$/
 Sleep 4s
