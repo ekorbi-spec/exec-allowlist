@@ -6,3 +6,10 @@ tetragon:
   # kind only: matches the extraMount in demo/kind-config.yaml. Remove this
   # on a real cluster, where the default (/proc) is correct.
   hostProcPath: /procHost
+  # The chart default also denies namespace "" (events not attributed to a
+  # pod). A `kubectl exec` command is execed by runc init, which Tetragon
+  # hasn't attributed to the pod yet, so its kill events land there and the
+  # default would drop every one of them.
+  exportDenyList: |-
+    {"health_check":true}
+    {"namespace":["cilium", "kube-system"]}

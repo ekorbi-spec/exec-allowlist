@@ -67,7 +67,7 @@ done
 printf '\033[1;32m$\033[0m %s\n' "kubectl -n kube-system logs ds/tetragon -c export-stdout | jq ..."
 sleep "$PAUSE"
 printf '%s\n' "$events" | jq -r 'select(. != null)
-  | "\(.action)  \(.args[0].linux_binprm_arg.path)  pod=\(.process.pod.namespace)/\(.process.pod.name)"'
+  | "\(.action)  \(.args[0].linux_binprm_arg.path)  policy=\(.policy_name)"'
 for bin in /usr/bin/cat /usr/bin/dash; do
   if printf '%s\n' "$events" | jq -e --arg b "$bin" \
       'select(.action == "KPROBE_ACTION_SIGKILL" and .args[0].linux_binprm_arg.path == $b)' >/dev/null 2>&1; then

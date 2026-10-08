@@ -110,8 +110,18 @@ Every `e2e` run records a fresh GIF and uploads it as the `demo-gif` artifact
 - **Scale:** each policy loads its own BPF program on `security_bprm_check`,
   which runs on every exec on the node. Fine per demo, worth measuring with
   hundreds of workloads.
-- **Large allowlists:** Tetragon documents per-selector limits on match
-  values. CI only exercises short lists; check long ones against your version.
+- **Container runtime exemption:** runc execs itself (`runc init`) and its
+  OCI hooks inside the pod's cgroup before joining the container. Policing
+  those breaks every container start and `kubectl exec` ("write init-p: broken
+  pipe"), so execs in the runtime's mount namespace are exempt: `host_ns` on
+  a normal node, the node container's namespace on kind (`--runtime-mnt-ns`).
+  Exempting by runc's path or by caller binary does not work: Tetragon
+  attributes runc init's exec of *your* command to runc, so a caller-based
+  exemption would let the first command of any `kubectl exec` through.
+  Only the kind case is tested in CI; `host_ns` on a real node is not yet.
+- **Large allowlists:** path matching (`Equal`/`NotEqual` on `linux_binprm`)
+  uses Tetragon's string hash maps, so the documented 4-value limit for
+  numeric matches doesn't apply. CI only exercises short lists.
 - **Kernel support:** Sigkill uses `bpf_send_signal` (Linux 5.3+) and Tetragon
   needs BTF. Fall back to `audit` mode where enforcement isn't available.
 
