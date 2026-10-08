@@ -52,6 +52,19 @@ spec:
       args:
         - index: 0
           type: linux_binprm
+{{- /*
+  The OCI runtime re-execs itself (runc init) inside the pod's cgroup before
+  it starts a container or `kubectl exec` process, and Tetragon then records
+  runc init's binary as the runtime too. So:
+
+  - selector 1 polices every exec except the allowlist and the runtime binary;
+  - selector 2 polices exec *of* the runtime binary unless the caller is the
+    runtime itself.
+
+  Net effect: only runtime -> runtime re-execs are exempt. Without this,
+  enforce mode breaks every exec into the pod ("write init-p: broken pipe").
+  Selectors are a short-circuit OR; the first one that matches acts.
+*/}}
       selectors:
         - matchArgs:
             - index: 0
@@ -60,13 +73,18 @@ spec:
 {{- range .Binaries }}
                 - {{ . | printf "%q" }}
 {{- end }}
-{{- /*
-  The OCI runtime re-execs itself (runc init) inside the pod's cgroup before
-  it starts a container or `kubectl exec` process. Without this, enforce mode
-  breaks every exec into the pod ("write init-p: broken pipe"). The exemption
-  is on the *caller*: only execs made by the node's runtime binary skip the
-  check. Whatever runc init then execs is still checked.
-*/}}
+{{- range .RuntimeBinaries }}
+                - {{ . | printf "%q" }}
+{{- end }}
+          matchActions:
+            - action: {{ template "action" . }}
+        - matchArgs:
+            - index: 0
+              operator: Equal
+              values:
+{{- range .RuntimeBinaries }}
+                - {{ . | printf "%q" }}
+{{- end }}
           matchBinaries:
             - operator: NotIn
               values:
@@ -74,8 +92,5 @@ spec:
                 - {{ . | printf "%q" }}
 {{- end }}
           matchActions:
-{{- if .Enforce }}
-            - action: Sigkill
-{{- else }}
-            - action: Post
-{{- end }}
+            - action: {{ template "action" . }}
+{{- define "action" }}{{ if .Enforce }}Sigkill{{ else }}Post{{ end }}{{ end }}

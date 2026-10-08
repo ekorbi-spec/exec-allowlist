@@ -29,6 +29,24 @@ spec:
               values:
                 - "/usr/local/bin/checkout"
                 - "/usr/bin/curl"
+                - "/usr/local/sbin/runc"
+                - "/usr/sbin/runc"
+                - "/usr/bin/runc"
+                - "/usr/local/bin/runc"
+                - "/usr/bin/crun"
+                - "/usr/local/bin/crun"
+          matchActions:
+            - action: Post
+        - matchArgs:
+            - index: 0
+              operator: Equal
+              values:
+                - "/usr/local/sbin/runc"
+                - "/usr/sbin/runc"
+                - "/usr/bin/runc"
+                - "/usr/local/bin/runc"
+                - "/usr/bin/crun"
+                - "/usr/local/bin/crun"
           matchBinaries:
             - operator: NotIn
               values:
