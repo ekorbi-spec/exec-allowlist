@@ -12,6 +12,7 @@ Template data:
   .Selector   map[string]string, the workload's pod selector labels
   .Binaries   []string, parsed from exec-allowlist.io/binaries
   .Enforce    bool, true when the namespace label is mode=enforce
+  .RuntimeBinaries []string, node OCI runtime paths whose execs are exempt
 
 How it works: security_bprm_check runs for every execve. Its first argument
 (struct linux_binprm) carries the path of the binary about to run. If that
@@ -57,6 +58,19 @@ spec:
               operator: NotEqual
               values:
 {{- range .Binaries }}
+                - {{ . | printf "%q" }}
+{{- end }}
+{{- /*
+  The OCI runtime re-execs itself (runc init) inside the pod's cgroup before
+  it starts a container or `kubectl exec` process. Without this, enforce mode
+  breaks every exec into the pod ("write init-p: broken pipe"). The exemption
+  is on the *caller*: only execs made by the node's runtime binary skip the
+  check. Whatever runc init then execs is still checked.
+*/}}
+          matchBinaries:
+            - operator: NotIn
+              values:
+{{- range .RuntimeBinaries }}
                 - {{ . | printf "%q" }}
 {{- end }}
           matchActions:

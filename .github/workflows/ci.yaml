@@ -72,7 +72,7 @@ jobs:
           sleep 10
           kubectl -n demo exec deploy/sample-app -- /usr/bin/sleep 0 || true
           kubectl -n demo exec deploy/sample-app -- /usr/bin/true || true
-          sleep 3
+          sleep 40 # Tetragon may hold events ~30s while resolving process info
           kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 2000 \
             | jq -c 'select(.process_kprobe) | .process_kprobe | {action, policy_name, path: .args[0].linux_binprm_arg.path, bin: .process.binary, args: .process.arguments, parent: .parent.binary, pod: .process.pod.name}' \
             | tail -20 || true

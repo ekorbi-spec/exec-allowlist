@@ -52,9 +52,18 @@ restarts=$(kubectl -n demo get pods -l app=sample-app -o jsonpath='{.items[0].st
 [ "$restarts" = 0 ] && ok "0 restarts" || bad "app restarted $restarts times"
 
 say "What Tetragon reported"
-sleep 2 # let the export sidecar flush
-events=$(kubectl -n kube-system logs ds/tetragon -c export-stdout --since-time="$START" \
-  | jq -c --arg p "$POLICY" 'select(.process_kprobe.policy_name == $p) | .process_kprobe')
+# Tetragon can hold events for up to ~30s while it resolves process info.
+fetch_events() {
+  kubectl -n kube-system logs ds/tetragon -c export-stdout --since-time="$START" \
+    | jq -c --arg p "$POLICY" 'select(.process_kprobe.policy_name == $p) | .process_kprobe'
+}
+for _ in $(seq 1 45); do
+  events=$(fetch_events)
+  if printf '%s\n' "$events" | grep -q /usr/bin/cat && printf '%s\n' "$events" | grep -q /usr/bin/dash; then
+    break
+  fi
+  sleep 1
+done
 printf '\033[1;32m$\033[0m %s\n' "kubectl -n kube-system logs ds/tetragon -c export-stdout | jq ..."
 sleep "$PAUSE"
 printf '%s\n' "$events" | jq -r 'select(. != null)

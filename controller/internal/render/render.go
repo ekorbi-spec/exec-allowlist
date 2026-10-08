@@ -29,6 +29,18 @@ var tmplText string
 
 var tmpl = template.Must(template.New("tracingpolicy").Parse(tmplText))
 
+// DefaultRuntimeBinaries are node paths of OCI runtimes whose own execs
+// (runc init) happen inside the pod's cgroup and must not be policed.
+// These are host paths, outside any container image's filesystem.
+var DefaultRuntimeBinaries = []string{
+	"/usr/local/sbin/runc", // kind, containerd release tarballs
+	"/usr/sbin/runc",
+	"/usr/bin/runc", // distro packages
+	"/usr/local/bin/runc",
+	"/usr/bin/crun",
+	"/usr/local/bin/crun",
+}
+
 // Workload is the template data for one TracingPolicyNamespaced.
 type Workload struct {
 	Name      string            // workload name, e.g. "checkout"
@@ -39,6 +51,10 @@ type Workload struct {
 	Selector  map[string]string // the workload's pod selector labels
 	Binaries  []string          // parsed from the annotation
 	Enforce   bool              // namespace label is mode=enforce
+
+	// RuntimeBinaries exempts execs whose caller is one of these binaries.
+	// Empty means DefaultRuntimeBinaries.
+	RuntimeBinaries []string
 }
 
 // ParseBinaries splits an annotation value into absolute paths. It rejects
@@ -79,6 +95,9 @@ func Render(w Workload) ([]byte, error) {
 		return nil, errors.New("render: refusing an empty pod selector")
 	case len(w.Binaries) == 0:
 		return nil, errors.New("render: allowlist is empty")
+	}
+	if len(w.RuntimeBinaries) == 0 {
+		w.RuntimeBinaries = DefaultRuntimeBinaries
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, w); err != nil {
