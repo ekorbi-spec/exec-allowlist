@@ -1,4 +1,5 @@
-# VHS script for the README GIF: `make gif` (after `make demo-setup`).
+# VHS script for the README GIF: `make gif` (after `make demo-setup`), or the
+# e2e job in .github/workflows/ci.yaml, which uploads it as an artifact.
 # https://github.com/charmbracelet/vhs
 Output docs/demo.gif
 

@@ -45,7 +45,8 @@ make kind-down
 `make demo` is also the end-to-end test: [demo/demo.sh](demo/demo.sh) exits
 non-zero unless Kyverno rejects the bad Deployment, the allowed exec succeeds,
 the others exit 137, the app keeps running, and Tetragon reports both kills.
-To re-record the GIF, run the `demo-gif` workflow (or `make demo-setup gif`).
+Every `e2e` run records a fresh GIF and uploads it as the `demo-gif` artifact
+(locally: `make demo-setup gif`).
 
 ## How it fits together
 
@@ -82,7 +83,7 @@ To re-record the GIF, run the `demo-gif` workflow (or `make demo-setup gif`).
 │   ├── demo.tape                 # VHS script for docs/demo.gif
 │   └── kind-config.yaml, namespace.yaml, sample-app.yaml, bad-app.yaml
 ├── docs/demo.gif
-└── .github/workflows/            # ci.yaml (kyverno test, go test, e2e), demo-gif.yaml
+└── .github/workflows/            # ci.yaml: kyverno test, go test, e2e (+ GIF artifact)
 ```
 
 ## Known limitations

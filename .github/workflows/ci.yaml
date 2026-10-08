@@ -64,3 +64,14 @@ jobs:
           kubectl -n kube-system logs ds/tetragon -c tetragon --tail 200 || true
           kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 50 || true
           kubectl get events -A --sort-by=.lastTimestamp | tail -50 || true
+      # Record the README GIF from the same cluster. demo.sh already passed
+      # above, so the recording shows a known-good run.
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          version: v0.12.1
+          path: demo/demo.tape
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-gif
+          path: docs/demo.gif
+          if-no-files-found: error
