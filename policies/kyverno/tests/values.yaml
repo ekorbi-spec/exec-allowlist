@@ -1,0 +1,17 @@
+# Namespace labels for the Kyverno CLI, which has no cluster to look them up in.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: apps-audit
+    labels:
+      exec-allowlist.io/mode: audit
+  - name: apps-prod
+    labels:
+      exec-allowlist.io/mode: enforce
+      exec-allowlist.io/env: prod
+  # prod, but not opted in: the policy should leave it alone.
+  - name: prod-unmanaged
+    labels:
+      exec-allowlist.io/env: prod
+  - name: default
+    labels: {}

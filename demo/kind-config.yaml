@@ -1,0 +1,9 @@
+# Single-node kind cluster set up the way Tetragon's install docs ask:
+# Tetragon reads the host's /proc, which kind nodes don't expose by default.
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: /proc
+        containerPath: /procHost

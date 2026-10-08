@@ -1,0 +1,8 @@
+# Helm values for the Tetragon chart (tested with chart 1.7.1).
+tetragon:
+  # Needed for podSelector in TracingPolicyNamespaced. On by default in
+  # recent charts; pinned here so an upgrade can't silently drop it.
+  enablePolicyFilter: true
+  # kind only: matches the extraMount in demo/kind-config.yaml. Remove this
+  # on a real cluster, where the default (/proc) is correct.
+  hostProcPath: /procHost

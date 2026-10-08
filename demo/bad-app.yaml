@@ -1,0 +1,21 @@
+# Rejected at admission: a shell (hidden behind a space) in a prod namespace.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-app
+  namespace: demo
+spec:
+  selector:
+    matchLabels:
+      app: bad-app
+  template:
+    metadata:
+      labels:
+        app: bad-app
+      annotations:
+        exec-allowlist.io/binaries: /usr/bin/sleep, /bin/sh
+    spec:
+      containers:
+        - name: app
+          image: debian:13-slim
+          command: [/usr/bin/sleep, infinity]

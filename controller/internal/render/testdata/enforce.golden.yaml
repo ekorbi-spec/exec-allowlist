@@ -1,0 +1,33 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: exec-allowlist-checkout
+  namespace: shop
+  labels:
+    app.kubernetes.io/managed-by: exec-allowlist
+    exec-allowlist.io/mode: enforce
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: checkout
+      uid: 6f1c1d2e-0000-4000-8000-000000000001
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: "checkout"
+      tier: "web"
+  kprobes:
+    - call: security_bprm_check
+      syscall: false
+      args:
+        - index: 0
+          type: linux_binprm
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: NotEqual
+              values:
+                - "/usr/local/bin/checkout"
+                - "/usr/bin/curl"
+          matchActions:
+            - action: Sigkill

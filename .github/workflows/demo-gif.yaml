@@ -1,0 +1,39 @@
+# Records docs/demo.gif on a real kind cluster and uploads it as an artifact.
+# Run it from the Actions tab, then commit the GIF from the artifact.
+name: demo-gif
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  KIND_VERSION: v0.33.0
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.mod
+      - name: Install kind
+        run: |
+          curl -fsSLo kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          sudo install kind /usr/local/bin/kind
+      - run: make demo-setup
+      # Pre-build the renderer so `go run` doesn't pause mid-recording.
+      - run: cd controller && go build ./...
+      - uses: charmbracelet/vhs-action@v2
+        with:
+          version: v0.12.1
+          path: demo/demo.tape
+      - uses: actions/upload-artifact@v7
+        with:
+          name: demo-gif
+          path: docs/demo.gif
+          if-no-files-found: error

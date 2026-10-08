@@ -1,0 +1,291 @@
+# Good and bad workloads for require-exec-allowlist.
+# Names say what each one exercises; expected results live in kyverno-test.yaml.
+
+# ---------------------------------------------------------------- good ----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-audit
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,/usr/bin/curl
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# Not opted in: no annotation needed.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unmanaged
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# Opted-out prod namespace: shells are not policed here (no TracingPolicy
+# would be generated anyway).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shell-prod-unmanaged
+  namespace: prod-unmanaged
+  annotations:
+    exec-allowlist.io/binaries: /bin/sh
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# ----------------------------------------------- bad: annotation-present ----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-missing
+  namespace: apps-audit
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-empty
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: ""
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# ---------------------------------------------- bad: entries-well-formed ----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-relative
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: app,/usr/bin/curl
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-star
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/bin/*
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-question
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/bin/?ash
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# The space bug: " /bin/sh" used to dodge the shell blocklist.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-space
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app, /bin/sh
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-tab
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: "/usr/local/bin/app,\t/usr/bin/curl"
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-trailing-comma
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-empty-entry
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,,/usr/bin/curl
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# -------------------------------------------------- bad: no-shells-in-prod ----
+# Same space trick in prod: rejected by both rule 2 and rule 3.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-space-shell-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app, /bin/sh
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-sh-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,/bin/sh
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-usr-bin-ash-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,/usr/bin/ash
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-zsh-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /bin/zsh,/usr/local/bin/app
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-busybox-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,/bin/busybox
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-hush-prod
+  namespace: apps-prod
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app,/bin/hush
+spec:
+  containers:
+    - name: app
+      image: example.com/app:1.0
+---
+# ------------------------------------------------ Deployments (autogen) ----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: good-deploy
+  namespace: apps-prod
+spec:
+  selector:
+    matchLabels: {app: good-deploy}
+  template:
+    metadata:
+      labels: {app: good-deploy}
+      annotations:
+        exec-allowlist.io/binaries: /usr/local/bin/app
+    spec:
+      containers:
+        - name: app
+          image: example.com/app:1.0
+---
+# The annotation must be on the pod template, not the Deployment itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-wrong-place
+  namespace: apps-audit
+  annotations:
+    exec-allowlist.io/binaries: /usr/local/bin/app
+spec:
+  selector:
+    matchLabels: {app: bad-deploy-wrong-place}
+  template:
+    metadata:
+      labels: {app: bad-deploy-wrong-place}
+    spec:
+      containers:
+        - name: app
+          image: example.com/app:1.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-deploy-shell-prod
+  namespace: apps-prod
+spec:
+  selector:
+    matchLabels: {app: bad-deploy-shell-prod}
+  template:
+    metadata:
+      labels: {app: bad-deploy-shell-prod}
+      annotations:
+        exec-allowlist.io/binaries: /usr/local/bin/app, /bin/bash
+    spec:
+      containers:
+        - name: app
+          image: example.com/app:1.0

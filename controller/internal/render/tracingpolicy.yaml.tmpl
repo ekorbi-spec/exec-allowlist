@@ -18,9 +18,13 @@ How it works: security_bprm_check runs for every execve. Its first argument
 path matches none of the allowlisted values, the selector fires. In enforce
 mode the process gets SIGKILL; in audit mode it only emits an event.
 
+NotEqual with several values is "not in the set" (values are ANDed), per
+Tetragon's selector docs. linux_binprm yields the resolved full path of
+bprm->file, so symlinked paths never match (see README limitations).
+
 Requires Tetragon with the policy filter enabled so podSelector works
-(see deploy/tetragon-values.yaml). Verify operator semantics (NotEqual with
-a list = "matches none of") against the Tetragon version you pin.
+(see deploy/tetragon-values.yaml). Exercised end to end on Tetragon 1.7.1 by
+the e2e job in .github/workflows/ci.yaml.
 */ -}}
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicyNamespaced
