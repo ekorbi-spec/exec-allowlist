@@ -64,6 +64,18 @@ jobs:
           kubectl -n kube-system logs ds/tetragon -c tetragon --tail 200 || true
           kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 50 || true
           kubectl get events -A --sort-by=.lastTimestamp | tail -50 || true
+          echo "--- runc on the node"
+          docker exec "${KIND_CLUSTER:-exec-allowlist}-control-plane" sh -c 'command -v runc; runc --version' || true
+          echo "--- same policy in audit mode: what does Tetragon see for a kubectl exec?"
+          kubectl -n demo get deploy sample-app -o json \
+            | (cd controller && go run ./cmd/render --mode audit) | kubectl apply -f - || true
+          sleep 10
+          kubectl -n demo exec deploy/sample-app -- /usr/bin/sleep 0 || true
+          kubectl -n demo exec deploy/sample-app -- /usr/bin/true || true
+          sleep 3
+          kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 2000 \
+            | jq -c 'select(.process_kprobe) | .process_kprobe | {action, policy_name, path: .args[0].linux_binprm_arg.path, bin: .process.binary, args: .process.arguments, parent: .parent.binary, pod: .process.pod.name}' \
+            | tail -20 || true
       # Record the README GIF from the same cluster. demo.sh already passed
       # above, so the recording shows a known-good run.
       - uses: charmbracelet/vhs-action@v2

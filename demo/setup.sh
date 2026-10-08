@@ -50,9 +50,10 @@ last=""
 for i in $(seq 1 60); do
   rc=0
   err=$(kubectl -n demo exec deploy/sample-app -- /usr/bin/true 2>&1 >/dev/null) || rc=$?
-  if [ "rc=$rc $err" != "$last" ]; then
+  sig=$(printf "%s" "$err" | sed -E "s/[0-9a-f]{64}/<id>/g")
+  if [ "rc=$rc $sig" != "$last" ]; then
     echo "probe $i: exit $rc ${err:+($err)}"
-    last="rc=$rc $err"
+    last="rc=$rc $sig"
   fi
   if [ "$rc" -eq 137 ]; then
     echo "enforcing after ~$((i * 2))s"
