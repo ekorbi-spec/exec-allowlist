@@ -75,7 +75,10 @@ func TestRenderGolden(t *testing.T) {
 	enforce := base
 	enforce.Enforce = true
 
-	for name, w := range map[string]Workload{"audit": base, "enforce": enforce} {
+	kindNode := enforce
+	kindNode.RuntimeMntNS = "4026532301"
+
+	for name, w := range map[string]Workload{"audit": base, "enforce": enforce, "enforce-kind": kindNode} {
 		t.Run(name, func(t *testing.T) {
 			got, err := Render(w)
 			if err != nil {
@@ -108,8 +111,10 @@ func TestRenderRejects(t *testing.T) {
 	noBins.Binaries = nil
 	noUID := ok
 	noUID.UID = ""
+	badNS := ok
+	badNS.RuntimeMntNS = "mnt:[4026532301]"
 
-	for name, w := range map[string]Workload{"empty selector": noSel, "empty allowlist": noBins, "missing uid": noUID} {
+	for name, w := range map[string]Workload{"empty selector": noSel, "empty allowlist": noBins, "missing uid": noUID, "bad runtime ns": badNS} {
 		if _, err := Render(w); err == nil {
 			t.Errorf("%s: want error", name)
 		}

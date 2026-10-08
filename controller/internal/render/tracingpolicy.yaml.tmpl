@@ -12,7 +12,8 @@ Template data:
   .Selector   map[string]string, the workload's pod selector labels
   .Binaries   []string, parsed from exec-allowlist.io/binaries
   .Enforce    bool, true when the namespace label is mode=enforce
-  .RuntimeBinaries []string, node OCI runtime paths whose execs are exempt
+  .RuntimeMntNS string, mount namespace the node runtime runs in ("host_ns"
+              or an inode number); execs in that namespace are exempt
 
 How it works: security_bprm_check runs for every execve. Its first argument
 (struct linux_binprm) carries the path of the binary about to run. If that
@@ -53,17 +54,12 @@ spec:
         - index: 0
           type: linux_binprm
 {{- /*
-  The OCI runtime re-execs itself (runc init) inside the pod's cgroup before
-  it starts a container or `kubectl exec` process, and Tetragon then records
-  runc init's binary as the runtime too. So:
-
-  - selector 1 polices every exec except the allowlist and the runtime binary;
-  - selector 2 polices exec *of* the runtime binary unless the caller is the
-    runtime itself.
-
-  Net effect: only runtime -> runtime re-execs are exempt. Without this,
-  enforce mode breaks every exec into the pod ("write init-p: broken pipe").
-  Selectors are a short-circuit OR; the first one that matches acts.
+  Only execs inside the container's mount namespace are policed. The OCI
+  runtime execs in the pod's cgroup but in the node's namespaces: runc
+  re-execs itself as `runc init`, and runs OCI hooks, before it joins the
+  container. Policing those would break every container start and every
+  `kubectl exec` ("write init-p: broken pipe"). Once runc init has joined the
+  container, whatever it execs (your command) is checked.
 */}}
       selectors:
         - matchArgs:
@@ -73,24 +69,14 @@ spec:
 {{- range .Binaries }}
                 - {{ . | printf "%q" }}
 {{- end }}
-{{- range .RuntimeBinaries }}
-                - {{ . | printf "%q" }}
-{{- end }}
-          matchActions:
-            - action: {{ template "action" . }}
-        - matchArgs:
-            - index: 0
-              operator: Equal
+          matchNamespaces:
+            - namespace: Mnt
+              operator: NotIn
               values:
-{{- range .RuntimeBinaries }}
-                - {{ . | printf "%q" }}
-{{- end }}
-          matchBinaries:
-            - operator: NotIn
-              values:
-{{- range .RuntimeBinaries }}
-                - {{ . | printf "%q" }}
-{{- end }}
+                - {{ .RuntimeMntNS | printf "%q" }}
           matchActions:
-            - action: {{ template "action" . }}
-{{- define "action" }}{{ if .Enforce }}Sigkill{{ else }}Post{{ end }}{{ end }}
+{{- if .Enforce }}
+            - action: Sigkill
+{{- else }}
+            - action: Post
+{{- end }}

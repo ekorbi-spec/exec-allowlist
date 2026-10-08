@@ -33,6 +33,6 @@ spec:
             - namespace: Mnt
               operator: NotIn
               values:
-                - "host_ns"
+                - "4026532301"
           matchActions:
             - action: Sigkill

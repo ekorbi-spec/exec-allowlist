@@ -65,10 +65,10 @@ jobs:
           kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 50 || true
           kubectl get events -A --sort-by=.lastTimestamp | tail -50 || true
           echo "--- runc on the node"
-          docker exec "${KIND_CLUSTER:-exec-allowlist}-control-plane" sh -c 'command -v runc; runc --version' || true
+          docker exec "${KIND_CLUSTER:-exec-allowlist}-control-plane" sh -c 'command -v runc; runc --version; echo "pid1 mnt: $(readlink /proc/1/ns/mnt)"; echo "containerd mnt: $(readlink /proc/$(pidof containerd)/ns/mnt)"' || true
           echo "--- same policy in audit mode: what does Tetragon see for a kubectl exec?"
           kubectl -n demo get deploy sample-app -o json \
-            | (cd controller && go run ./cmd/render --mode audit) | kubectl apply -f - || true
+            | (cd controller && go run ./cmd/render --mode audit --runtime-mnt-ns "$(docker exec exec-allowlist-control-plane readlink /proc/1/ns/mnt | tr -dc 0-9)") | kubectl apply -f - || true
           sleep 10
           kubectl -n demo exec deploy/sample-app -- /usr/bin/sleep 0 || true
           kubectl -n demo exec deploy/sample-app -- /usr/bin/true || true

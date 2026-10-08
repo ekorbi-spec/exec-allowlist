@@ -19,15 +19,17 @@ import (
 
 func main() {
 	mode := flag.String("mode", "audit", "namespace mode: audit or enforce")
+	runtimeNS := flag.String("runtime-mnt-ns", render.HostMntNS,
+		"mount namespace the container runtime runs in: host_ns, or an inode number (kind: the node container's)")
 	flag.Parse()
 
-	if err := run(*mode, os.Stdin, os.Stdout); err != nil {
+	if err := run(*mode, *runtimeNS, os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "render:", err)
 		os.Exit(1)
 	}
 }
 
-func run(mode string, in io.Reader, out io.Writer) error {
+func run(mode, runtimeNS string, in io.Reader, out io.Writer) error {
 	enforce, err := render.ParseMode(mode)
 	if err != nil {
 		return err
@@ -40,6 +42,7 @@ func run(mode string, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	w.RuntimeMntNS = runtimeNS
 	y, err := render.Render(w)
 	if err != nil {
 		return err

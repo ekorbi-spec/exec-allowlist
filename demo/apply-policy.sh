@@ -16,6 +16,20 @@ if [ -z "$mode" ]; then
   exit 1
 fi
 
+# The container runtime's execs (runc init, OCI hooks) are exempt by mount
+# namespace. On a real node that's the host's ("host_ns"); on kind, runc runs
+# inside the node container, so use that container's mount namespace.
+runtime_ns=${RUNTIME_MNT_NS:-}
+if [ -z "$runtime_ns" ]; then
+  ctx=$(kubectl config current-context)
+  if [[ $ctx == kind-* ]]; then
+    node="${ctx#kind-}-control-plane"
+    runtime_ns=$(docker exec "$node" readlink /proc/1/ns/mnt | tr -dc 0-9)
+  else
+    runtime_ns=host_ns
+  fi
+fi
+
 kubectl -n "$ns" get deploy "$deploy" -o json \
-  | (cd "$root/controller" && go run ./cmd/render --mode "$mode") \
+  | (cd "$root/controller" && go run ./cmd/render --mode "$mode" --runtime-mnt-ns "$runtime_ns") \
   | kubectl apply -f -
