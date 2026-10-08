@@ -46,9 +46,14 @@ demo/apply-policy.sh demo sample-app
 step "Waiting for Tetragon to enforce"
 # /usr/bin/true is not on the allowlist, so once the policy is loaded the
 # exec gets SIGKILLed (exit 137). Until then it exits 0.
+last=""
 for i in $(seq 1 60); do
   rc=0
-  kubectl -n demo exec deploy/sample-app -- /usr/bin/true >/dev/null 2>&1 || rc=$?
+  err=$(kubectl -n demo exec deploy/sample-app -- /usr/bin/true 2>&1 >/dev/null) || rc=$?
+  if [ "rc=$rc $err" != "$last" ]; then
+    echo "probe $i: exit $rc ${err:+($err)}"
+    last="rc=$rc $err"
+  fi
   if [ "$rc" -eq 137 ]; then
     echo "enforcing after ~$((i * 2))s"
     exit 0
@@ -56,6 +61,8 @@ for i in $(seq 1 60); do
   sleep 2
 done
 echo "Tetragon never started enforcing (last exit code: $rc)" >&2
+kubectl -n kube-system logs ds/tetragon -c export-stdout --tail 400 \
+  | jq -c 'select(.process_kprobe) | .process_kprobe | {action, policy_name, args, bin: .process.binary, pod: .process.pod.name}' >&2 || true
 kubectl get tracingpolicynamespaced -A -o yaml >&2 || true
 kubectl -n kube-system logs ds/tetragon -c tetragon --tail 100 >&2 || true
 exit 1
