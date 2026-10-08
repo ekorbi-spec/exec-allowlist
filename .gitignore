@@ -1,0 +1,14 @@
+# Go
+/bin/
+*.test
+*.out
+coverage.*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local kind / kube state
+*.kubeconfig

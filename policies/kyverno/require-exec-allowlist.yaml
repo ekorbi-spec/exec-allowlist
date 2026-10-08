@@ -1,0 +1,108 @@
+# policies/kyverno/require-exec-allowlist.yaml
+#
+# Applies only to namespaces that opt in with the label
+#   exec-allowlist.io/mode: audit | enforce
+# Kyverno autogen extends these Pod rules to Deployments, StatefulSets,
+# DaemonSets, Jobs and CronJobs, so mistakes are rejected before pods exist.
+#
+# Note: per-rule `failureAction` replaced spec.validationFailureAction in
+# newer Kyverno releases. Check the syntax against the version you pin.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-exec-allowlist
+  annotations:
+    policies.kyverno.io/title: Require exec allowlist
+    policies.kyverno.io/category: Runtime Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/description: >-
+      Pods in opted-in namespaces must declare the binaries they are allowed
+      to execute. The exec-allowlist controller turns this annotation into a
+      Tetragon TracingPolicy that enforces it at runtime.
+spec:
+  background: true
+  rules:
+    # 1. The annotation must exist and be non-empty.
+    - name: annotation-present
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - key: exec-allowlist.io/mode
+                    operator: In
+                    values: [audit, enforce]
+      validate:
+        failureAction: Enforce
+        message: >-
+          Pods in this namespace must set the annotation
+          exec-allowlist.io/binaries to a comma-separated list of absolute paths.
+        pattern:
+          metadata:
+            annotations:
+              exec-allowlist.io/binaries: "?*"
+
+    # 2. Every entry must be an absolute path, with no wildcards.
+    - name: entries-well-formed
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchExpressions:
+                  - key: exec-allowlist.io/mode
+                    operator: In
+                    values: [audit, enforce]
+      preconditions:
+        all:
+          - key: '{{ request.object.metadata.annotations."exec-allowlist.io/binaries" || '''' }}'
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: >-
+          exec-allowlist.io/binaries entries must be absolute paths without
+          wildcards. Got: {{ request.object.metadata.annotations."exec-allowlist.io/binaries" }}
+        deny:
+          conditions:
+            any:
+              - key: '{{ contains(request.object.metadata.annotations."exec-allowlist.io/binaries", ''*'') }}'
+                operator: Equals
+                value: true
+              - key: '{{ split(request.object.metadata.annotations."exec-allowlist.io/binaries", '','')[?!starts_with(@, ''/'')] | length(@) }}'
+                operator: GreaterThan
+                value: 0
+
+    # 3. No general-purpose shells in production namespaces.
+    - name: no-shells-in-prod
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels:
+                  exec-allowlist.io/env: prod
+      preconditions:
+        all:
+          - key: '{{ request.object.metadata.annotations."exec-allowlist.io/binaries" || '''' }}'
+            operator: NotEquals
+            value: ""
+      validate:
+        failureAction: Enforce
+        message: Shells are not allowed in exec-allowlist.io/binaries in prod namespaces.
+        deny:
+          conditions:
+            any:
+              - key: '{{ split(request.object.metadata.annotations."exec-allowlist.io/binaries", '','') }}'
+                operator: AnyIn
+                value:
+                  - /bin/sh
+                  - /bin/bash
+                  - /bin/dash
+                  - /bin/ash
+                  - /usr/bin/sh
+                  - /usr/bin/bash
+                  - /usr/bin/dash
+                  - /bin/busybox

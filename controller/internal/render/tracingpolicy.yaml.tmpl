@@ -1,0 +1,63 @@
+{{- /*
+controller/internal/render/tracingpolicy.yaml.tmpl
+
+Go text/template rendered by the controller, one per workload.
+
+Template data:
+  .Name       workload name, e.g. "checkout"
+  .Namespace  workload namespace
+  .UID        owner UID (for ownerReferences / cleanup)
+  .OwnerKind  e.g. "Deployment"
+  .OwnerAPI   e.g. "apps/v1"
+  .Selector   map[string]string, the workload's pod selector labels
+  .Binaries   []string, parsed from exec-allowlist.io/binaries
+  .Enforce    bool, true when the namespace label is mode=enforce
+
+How it works: security_bprm_check runs for every execve. Its first argument
+(struct linux_binprm) carries the path of the binary about to run. If that
+path matches none of the allowlisted values, the selector fires. In enforce
+mode the process gets SIGKILL; in audit mode it only emits an event.
+
+Requires Tetragon with the policy filter enabled so podSelector works
+(see deploy/tetragon-values.yaml). Verify operator semantics (NotEqual with
+a list = "matches none of") against the Tetragon version you pin.
+*/ -}}
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: exec-allowlist-{{ .Name }}
+  namespace: {{ .Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: exec-allowlist
+    exec-allowlist.io/mode: {{ if .Enforce }}enforce{{ else }}audit{{ end }}
+  ownerReferences:
+    - apiVersion: {{ .OwnerAPI }}
+      kind: {{ .OwnerKind }}
+      name: {{ .Name }}
+      uid: {{ .UID }}
+spec:
+  podSelector:
+    matchLabels:
+{{- range $k, $v := .Selector }}
+      {{ $k }}: {{ $v | printf "%q" }}
+{{- end }}
+  kprobes:
+    - call: security_bprm_check
+      syscall: false
+      args:
+        - index: 0
+          type: linux_binprm
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: NotEqual
+              values:
+{{- range .Binaries }}
+                - {{ . | printf "%q" }}
+{{- end }}
+          matchActions:
+{{- if .Enforce }}
+            - action: Sigkill
+{{- else }}
+            - action: Post
+{{- end }}
