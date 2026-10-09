@@ -5,8 +5,7 @@
 # Kyverno autogen extends these Pod rules to Deployments, StatefulSets,
 # DaemonSets, Jobs and CronJobs, so mistakes are rejected before pods exist.
 #
-# Note: per-rule `failureAction` replaced spec.validationFailureAction in
-# newer Kyverno releases. Check the syntax against the version you pin.
+# Tested with Kyverno v1.19.1 (see tests/ and the Makefile's KYVERNO_VERSION).
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -44,7 +43,10 @@ spec:
             annotations:
               exec-allowlist.io/binaries: "?*"
 
-    # 2. Every entry must be an absolute path, with no wildcards.
+    # 2. The whole value must be a comma-separated list of absolute paths:
+    #    no whitespace anywhere (so " /bin/sh" can't slip past rule 3 or the
+    #    controller's parser), no empty entries, no wildcards (* or ?).
+    #    The controller parses with the same grammar (controller/internal/render).
     - name: entries-well-formed
       match:
         any:
@@ -63,19 +65,28 @@ spec:
       validate:
         failureAction: Enforce
         message: >-
-          exec-allowlist.io/binaries entries must be absolute paths without
-          wildcards. Got: {{ request.object.metadata.annotations."exec-allowlist.io/binaries" }}
+          exec-allowlist.io/binaries must be a comma-separated list of absolute
+          paths with no spaces, empty entries or wildcards
+          (e.g. "/usr/local/bin/app,/usr/bin/curl").
+          Got: "{{ request.object.metadata.annotations."exec-allowlist.io/binaries" }}"
         deny:
           conditions:
             any:
-              - key: '{{ contains(request.object.metadata.annotations."exec-allowlist.io/binaries", ''*'') }}'
+              - key: '{{ regex_match(''^/[^,*?[:space:]]+(,/[^,*?[:space:]]+)*$'', request.object.metadata.annotations."exec-allowlist.io/binaries") }}'
                 operator: Equals
-                value: true
-              - key: '{{ split(request.object.metadata.annotations."exec-allowlist.io/binaries", '','')[?!starts_with(@, ''/'')] | length(@) }}'
-                operator: GreaterThan
-                value: 0
+                value: false
 
     # 3. No general-purpose shells in production namespaces.
+    #
+    # Scoped to opted-in prod namespaces, so rule 2 always runs alongside it
+    # and rejects whitespace. Spaces are also stripped here before splitting,
+    # so the blocklist holds even if rule 2 is ever relaxed.
+    #
+    # This is a list of *declared* paths. At runtime the kernel reports the
+    # resolved path (e.g. /bin/sh -> /usr/bin/dash, or /bin/sh -> /bin/busybox
+    # on Alpine), so resolved targets are listed too. Every busybox/toybox
+    # applet resolves to the multi-call binary itself, which is why allowing
+    # /bin/busybox would allow every applet, shells included.
     - name: no-shells-in-prod
       match:
         any:
@@ -84,6 +95,10 @@ spec:
               namespaceSelector:
                 matchLabels:
                   exec-allowlist.io/env: prod
+                matchExpressions:
+                  - key: exec-allowlist.io/mode
+                    operator: In
+                    values: [audit, enforce]
       preconditions:
         all:
           - key: '{{ request.object.metadata.annotations."exec-allowlist.io/binaries" || '''' }}'
@@ -95,14 +110,39 @@ spec:
         deny:
           conditions:
             any:
-              - key: '{{ split(request.object.metadata.annotations."exec-allowlist.io/binaries", '','') }}'
+              - key: '{{ split(replace_all(request.object.metadata.annotations."exec-allowlist.io/binaries", '' '', ''''), '','') }}'
                 operator: AnyIn
                 value:
+                  # POSIX / common shells
                   - /bin/sh
-                  - /bin/bash
-                  - /bin/dash
-                  - /bin/ash
                   - /usr/bin/sh
+                  - /bin/bash
                   - /usr/bin/bash
+                  - /usr/local/bin/bash
+                  - /bin/rbash
+                  - /usr/bin/rbash
+                  - /bin/dash
                   - /usr/bin/dash
+                  - /bin/ash
+                  - /usr/bin/ash
+                  - /bin/zsh
+                  - /usr/bin/zsh
+                  - /usr/local/bin/zsh
+                  - /bin/ksh
+                  - /usr/bin/ksh
+                  - /bin/mksh
+                  - /usr/bin/mksh
+                  - /bin/csh
+                  - /usr/bin/csh
+                  - /bin/tcsh
+                  - /usr/bin/tcsh
+                  - /bin/fish
+                  - /usr/bin/fish
+                  - /usr/local/bin/fish
+                  # busybox applet shells and the multi-call binaries
+                  - /bin/hush
+                  - /usr/bin/hush
                   - /bin/busybox
+                  - /usr/bin/busybox
+                  - /bin/toybox
+                  - /usr/bin/toybox

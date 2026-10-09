@@ -12,15 +12,21 @@ Template data:
   .Selector   map[string]string, the workload's pod selector labels
   .Binaries   []string, parsed from exec-allowlist.io/binaries
   .Enforce    bool, true when the namespace label is mode=enforce
+  .RuntimeMntNS string, mount namespace the node runtime runs in ("host_ns"
+              or an inode number); execs in that namespace are exempt
 
 How it works: security_bprm_check runs for every execve. Its first argument
 (struct linux_binprm) carries the path of the binary about to run. If that
 path matches none of the allowlisted values, the selector fires. In enforce
 mode the process gets SIGKILL; in audit mode it only emits an event.
 
+NotEqual with several values is "not in the set" (values are ANDed), per
+Tetragon's selector docs. linux_binprm yields the resolved full path of
+bprm->file, so symlinked paths never match (see README limitations).
+
 Requires Tetragon with the policy filter enabled so podSelector works
-(see deploy/tetragon-values.yaml). Verify operator semantics (NotEqual with
-a list = "matches none of") against the Tetragon version you pin.
+(see deploy/tetragon-values.yaml). Exercised end to end on Tetragon 1.7.1 by
+the e2e job in .github/workflows/ci.yaml.
 */ -}}
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicyNamespaced
@@ -47,6 +53,14 @@ spec:
       args:
         - index: 0
           type: linux_binprm
+{{- /*
+  Only execs inside the container's mount namespace are policed. The OCI
+  runtime execs in the pod's cgroup but in the node's namespaces: runc
+  re-execs itself as `runc init`, and runs OCI hooks, before it joins the
+  container. Policing those would break every container start and every
+  `kubectl exec` ("write init-p: broken pipe"). Once runc init has joined the
+  container, whatever it execs (your command) is checked.
+*/}}
       selectors:
         - matchArgs:
             - index: 0
@@ -55,6 +69,11 @@ spec:
 {{- range .Binaries }}
                 - {{ . | printf "%q" }}
 {{- end }}
+          matchNamespaces:
+            - namespace: Mnt
+              operator: NotIn
+              values:
+                - {{ .RuntimeMntNS | printf "%q" }}
           matchActions:
 {{- if .Enforce }}
             - action: Sigkill

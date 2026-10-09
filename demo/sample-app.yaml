@@ -1,0 +1,25 @@
+# The "app" is /usr/bin/sleep from Debian. It's a real binary rather than a
+# busybox applet, so the path the kernel reports is the path declared here.
+# Debian 13 is usr-merged: /bin -> /usr/bin, so use /usr/bin paths.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sample-app
+  template:
+    metadata:
+      labels:
+        app: sample-app
+      annotations:
+        exec-allowlist.io/binaries: /usr/bin/sleep
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: app
+          image: debian:13-slim
+          command: [/usr/bin/sleep, infinity]

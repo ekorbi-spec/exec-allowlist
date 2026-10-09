@@ -1,0 +1,97 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: require-exec-allowlist
+policies:
+  - ../require-exec-allowlist.yaml
+resources:
+  - resources.yaml
+variables: values.yaml
+results:
+  # ---- annotation-present
+  - policy: require-exec-allowlist
+    rule: annotation-present
+    kind: Pod
+    resources: [apps-audit/good-audit, apps-prod/good-prod, apps-prod/bad-sh-prod]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: annotation-present
+    kind: Pod
+    resources: [apps-audit/bad-missing, apps-audit/bad-empty]
+    result: fail
+
+  # ---- entries-well-formed
+  - policy: require-exec-allowlist
+    rule: entries-well-formed
+    kind: Pod
+    resources: [apps-audit/good-audit, apps-prod/good-prod, apps-prod/bad-sh-prod]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: entries-well-formed
+    kind: Pod
+    resources:
+      - apps-audit/bad-relative
+      - apps-audit/bad-star
+      - apps-audit/bad-question
+      - apps-audit/bad-space
+      - apps-audit/bad-tab
+      - apps-audit/bad-trailing-comma
+      - apps-audit/bad-empty-entry
+      - apps-prod/bad-space-shell-prod
+    result: fail
+  # Missing annotation is rule 1's job; rule 2 steps aside.
+  - policy: require-exec-allowlist
+    rule: entries-well-formed
+    kind: Pod
+    resources: [apps-audit/bad-missing, apps-audit/bad-empty]
+    result: skip
+
+  # ---- no-shells-in-prod
+  - policy: require-exec-allowlist
+    rule: no-shells-in-prod
+    kind: Pod
+    resources: [apps-prod/good-prod]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: no-shells-in-prod
+    kind: Pod
+    resources:
+      - apps-prod/bad-space-shell-prod
+      - apps-prod/bad-sh-prod
+      - apps-prod/bad-usr-bin-ash-prod
+      - apps-prod/bad-zsh-prod
+      - apps-prod/bad-busybox-prod
+      - apps-prod/bad-hush-prod
+    result: fail
+
+  # ---- autogen rules on Deployments
+  - policy: require-exec-allowlist
+    rule: autogen-annotation-present
+    kind: Deployment
+    resources: [apps-prod/good-deploy, apps-prod/bad-deploy-shell-prod]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: autogen-annotation-present
+    kind: Deployment
+    resources: [apps-audit/bad-deploy-wrong-place]
+    result: fail
+  - policy: require-exec-allowlist
+    rule: autogen-entries-well-formed
+    kind: Deployment
+    resources: [apps-prod/good-deploy]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: autogen-entries-well-formed
+    kind: Deployment
+    resources: [apps-prod/bad-deploy-shell-prod]
+    result: fail
+  - policy: require-exec-allowlist
+    rule: autogen-no-shells-in-prod
+    kind: Deployment
+    resources: [apps-prod/good-deploy]
+    result: pass
+  - policy: require-exec-allowlist
+    rule: autogen-no-shells-in-prod
+    kind: Deployment
+    resources: [apps-prod/bad-deploy-shell-prod]
+    result: fail
